@@ -26,14 +26,14 @@ function encodeRfc3986Full(str) {
   return encodeRfc3986(encodeURIComponent(str))
 }
 
-// request: { path | body, [host], [method], [headers], [service], [region] }
+// request: { path | body, [host], [:authority], [method], [headers], [service], [region] }
 // credentials: { accessKeyId, secretAccessKey, [sessionToken] }
 function RequestSigner(request, credentials) {
 
   if (typeof request === 'string') request = url.parse(request)
 
   var headers = request.headers = (request.headers || {}),
-      hostParts = (!this.service || !this.region) && this.matchHost(request.hostname || request.host || headers.Host || headers.host)
+      hostParts = (!this.service || !this.region) && this.matchHost(request.hostname || request.host || request[':authority'] || headers.Host || headers.host || headers[':authority'])
 
   this.request = request
   this.credentials = credentials || this.defaultCredentials()
@@ -47,16 +47,28 @@ function RequestSigner(request, credentials) {
   if (!request.method && request.body)
     request.method = 'POST'
 
-  if (!headers.Host && !headers.host) {
-    headers.Host = request.hostname || request.host || this.createHost()
+  var http2Authority = request[':authority'] || headers[':authority']
+  if (http2Authority) {
+      headers[':authority'] = http2Authority;
 
-    // If a port is specified explicitly, use it as is
-    if (request.port)
-      headers.Host += ':' + request.port
+      // If a port is specified explicitly, use it as is
+      if (request.port) 
+        headers[':authority'] += ':' + request.port
+    
+    if (!request[':authority'])
+      request[':authority'] = headers[':authority']
+  } else {
+    if (!headers.Host && !headers.host) {
+      headers.Host = request.hostname || request.host || this.createHost()
+
+      // If a port is specified explicitly, use it as is
+      if (request.port)
+        headers.Host += ':' + request.port
+    }
+    if (!request.hostname && !request.host)
+      request.hostname = headers.Host || headers.host
   }
-  if (!request.hostname && !request.host)
-    request.hostname = headers.Host || headers.host
-
+  
   this.isCodeCommitGit = this.service === 'codecommit' && request.method === 'GIT'
 }
 
